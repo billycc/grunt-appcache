@@ -12,6 +12,10 @@ module.exports = function (grunt) {
 
     var path = require('path');
     var appcache = require('./lib/appcache').init(grunt);
+    var crypto = require('crypto');
+    var fs = require('fs');
+
+    var hash = crypto.createHash('md5');
 
     function array(input) {
         return Array.isArray(input) ? input : [input];
@@ -37,6 +41,12 @@ module.exports = function (grunt) {
     function expand(pattern, basePath) {
         var matches = grunt.file.expand({
             filter: function (src) {
+                hash.update(src);
+console.log({src:src});
+                if(grunt.file.isFile(src)) {
+                    hash.update(fs.readFileSync(src));
+                }
+
                 return grunt.file.isFile(src) || isUrl(src);
             }
         }, pattern);
@@ -82,21 +92,23 @@ module.exports = function (grunt) {
             Array.prototype.push.apply(cache, this.data.cache.literals);
         }
 
+        var hex = hash.digest('hex');
+
         var manifest = {
             version: {
-                revision: 1,
-                date: new Date()
+                revision: hex,
+                date: null
             },
             cache: cache,
             network: array(this.data.network || []),
             fallback: array(this.data.fallback || []),
             settings: options.preferOnline ? ['prefer-online'] : []
         };
-
+/*
         if (grunt.file.exists(output)) {
             var original = appcache.readManifest(output);
             manifest.version.revision = (1 + original.version.revision);
-        }
+        } */
 
         if (!appcache.writeManifest(output, manifest)) {
             grunt.log.error('AppCache manifest creation failed.');

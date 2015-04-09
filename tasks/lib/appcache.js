@@ -22,7 +22,7 @@ module.exports.init = function (grunt) {
         var manifest = {
             version: {
                 revision: 1,
-                date: new Date().toISOString()
+//                date: new Date().toISOString()
             },
             cache: [],
             network: [],
@@ -52,11 +52,12 @@ module.exports.init = function (grunt) {
 
             if (lines[i][0] === '#') {
                 if (!foundVersion) {
-                    var re = /# rev (\d+) - (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z)/;
+                    var re = /# rev (.+)/; //(\d+) - (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z)/;
                     var matches = re.exec(lines[i]);
                     if (matches) {
-                        manifest.version.revision = parseInt(matches[1], 10);
-                        manifest.version.date = new Date(matches[2]).toISOString();
+ //                       manifest.version.revision = parseInt(matches[1], 10);
+   //                     manifest.version.date = new Date(matches[2]).toISOString();
+                        manifest.version.revision = matches[1];
                         foundVersion = true;
                     }
                 }
@@ -90,12 +91,15 @@ module.exports.init = function (grunt) {
     exports.writeManifest = function (filepath, manifest) {
         var contents = ['CACHE MANIFEST'];
         var i;
-
+/*
         if (manifest.version.date.toISOString) {
             contents.push('# rev ' + manifest.version.revision + ' - ' + manifest.version.date.toISOString());
         } else {
             contents.push('# rev ' + manifest.version.revision + ' - ' + manifest.version.date);
         }
+        */
+
+        contents.push('# rev ' + manifest.version.revision);
 
         if (0 !== manifest.cache.length) {
             contents.push('');
