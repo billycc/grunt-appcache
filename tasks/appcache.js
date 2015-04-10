@@ -8,14 +8,15 @@
 
 'use strict';
 
-module.exports = function (grunt) {
+module.exports = function(grunt) {
 
     var path = require('path');
     var appcache = require('./lib/appcache').init(grunt);
-    var crypto = require('crypto');
-    var fs = require('fs');
 
-    var hash = crypto.createHash('md5');
+    var hash = {
+        update: function() {},
+        digest: function() {}
+    };
 
     function array(input) {
         return Array.isArray(input) ? input : [input];
@@ -25,8 +26,8 @@ module.exports = function (grunt) {
         return (/^(?:https?:)?\/\//i).test(path);
     }
 
-    function joinUrl(/* ... */) {
-        return Array.prototype.map.call(arguments, function (part) {
+    function joinUrl( /* ... */ ) {
+        return Array.prototype.map.call(arguments, function(part) {
             // remove trailing slashes
             return part.replace(/\/+$/, '');
         }).join('/');
@@ -34,37 +35,54 @@ module.exports = function (grunt) {
 
     function relative(basePath, filePath) {
         return path.relative(
-                path.normalize(basePath),
-                path.normalize(filePath));
+            path.normalize(basePath),
+            path.normalize(filePath));
     }
 
     function expand(pattern, basePath) {
         var matches = grunt.file.expand({
-            filter: function (src) {
-                hash.update(src);
-console.log({src:src});
-                if(grunt.file.isFile(src)) {
-                    hash.update(fs.readFileSync(src));
-                }
-
+            filter: function(src) {
                 return grunt.file.isFile(src) || isUrl(src);
             }
         }, pattern);
         if (typeof basePath === 'string') {
-            matches = matches.map(function (filePath) {
+            matches = matches.map(function(filePath) {
                 return relative(basePath, filePath);
             });
         }
         return matches;
     }
 
-    grunt.registerMultiTask('appcache', 'Automatically generates an HTML5 AppCache manifest from a list of files.', function () {
+    function hashFiles(items, basePath) {
+        var crypto = require('crypto');
+        var fs = require('fs');
+        var hash = crypto.createHash('md5');
+
+        hash.update(items.join('\n'));
+
+        for (var i = 0; i < items.length; i++) {
+            var f = items[i];
+            console.log(basePath + f);
+            hash.update(fs.readFileSync(basePath + '/' + f));
+        }
+
+        var hex = hash.digest('hex');
+        return hex;
+    }
+
+    grunt.registerMultiTask('appcache', 'Automatically generates an HTML5 AppCache manifest from a list of files.', function() {
         var output = path.normalize(this.data.dest);
         var options = this.options({
             basePath: process.cwd(),
             ignoreManifest: true,
-            preferOnline: false
+            preferOnline: false,
+            revision: 'seq+date'
         });
+
+        var useCrypto = false;
+        if (options.revision !== 'seq+date' && options.revision !== undefined) {
+            useCrypto = true;
+        }
 
         var ignored = [];
         if (this.data.ignored) {
@@ -80,35 +98,41 @@ console.log({src:src});
             this.data.cache.literals = array(this.data.cache.literals || []);
             cachePatterns = this.data.cache.patterns;
         }
-        var cache = expand(cachePatterns, options.basePath).filter(function (path) {
+        var cache = expand(cachePatterns, options.basePath).filter(function(path) {
             return ignored.indexOf(path) === -1;
         });
+
         if (typeof options.baseUrl === 'string') {
-            cache = cache.map(function (path) {
+            cache = cache.map(function(path) {
                 return joinUrl(options.baseUrl, path);
             });
         }
+
         if (typeof this.data.cache === 'object') {
             Array.prototype.push.apply(cache, this.data.cache.literals);
         }
 
-        var hex = hash.digest('hex');
+        var rev = 1;
+
+        if (useCrypto) {
+            rev = hashFiles(cache, options.basePath);
+        }
 
         var manifest = {
             version: {
-                revision: hex,
-                date: null
+                revision: rev,
+                date: new Date()
             },
             cache: cache,
             network: array(this.data.network || []),
             fallback: array(this.data.fallback || []),
             settings: options.preferOnline ? ['prefer-online'] : []
         };
-/*
-        if (grunt.file.exists(output)) {
-            var original = appcache.readManifest(output);
-            manifest.version.revision = (1 + original.version.revision);
-        } */
+        /*
+                if (grunt.file.exists(output)) {
+                    var original = appcache.readManifest(output);
+                    manifest.version.revision = (1 + original.version.revision);
+                } */
 
         if (!appcache.writeManifest(output, manifest)) {
             grunt.log.error('AppCache manifest creation failed.');
@@ -116,8 +140,8 @@ console.log({src:src});
         }
 
         grunt.log.writeln('AppCache manifest "' +
-                path.basename(output) +
-                '" created.');
+            path.basename(output) +
+            '" created.');
     });
 
 };
